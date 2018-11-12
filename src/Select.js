@@ -1,6 +1,12 @@
 import React, { Component } from 'react';
 import ReactDOM from 'react-dom';
 import PropTypes from 'prop-types';
+import { css } from 'emotion';
+import classnames from 'classnames';
+
+/* Theme */
+const borderColor = '#e6e6e6';
+const borderColorHover = '#03A9F4';
 
 /* Create the root element for Select */
 let root = document.getElementById('selectalot-root');
@@ -14,6 +20,8 @@ if (!root) {
 /* Create context for Select */
 const Context = React.createContext();
 
+/* Components */
+
 class Option extends Component {
   static propTypes = {
     label: PropTypes.string,
@@ -23,7 +31,7 @@ class Option extends Component {
       value: PropTypes.string,
       items: PropTypes.array,
     }),
-    onClick: PropTypes.func,
+    data: PropTypes.any,
     children: PropTypes.node,
   };
 
@@ -31,41 +39,52 @@ class Option extends Component {
     label: '',
     value: '',
     parent: null,
-    onClick: () => null,
+    data: null,
     children: null,
   };
 
   static contextType = Context;
 
-  getItemData = () => {
-    const {
-      label,
-      value,
-      parent,
-    } = this.props;
-
-    return {
-      value,
-      label,
-      parent,
-    };
-  }
-
   handleClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    this.context.onItemClick(this.getItemData());
+    this.context.onItemClick({
+      data: this.props.data,
+      path: this.getPath('value'),
+      labelPath: this.getPath('label'),
+    });
   };
+
+  getPath = (prop) => {
+    const traversePath = (item) => `${item.parent ? `${traversePath(item.parent)}/` : ''}${item[prop]}`;
+    return traversePath(this.props);
+  }
   
   render() {
     const {
+      data,
+      className,
       children,
     } = this.props;
 
+    const {
+      selectionString,
+    } = this.context;
+    
+    const path = this.getPath();
+    const isSelected = selectionString.indexOf(path, 0) !== -1;
+    const hasItems = data.items && data.items.length > 0;
+
     return (
-      <li onClick={this.handleClick}>
-        {this.context.renderItem(this.getItemData()) || children}
+      <li
+        className={classnames(className, {
+          'is-selected': isSelected,
+          'has-items': hasItems,
+        })}
+        onClick={this.handleClick}
+      >
+        {this.context.renderItem(this.props.data) || children}
       </li>
     );
   }
@@ -96,33 +115,45 @@ class List extends Component {
       items,
     } = this.props;
     
-    console.log(items);
-    
     return (
-      <ul>
+      <ul
+        className={css`
+          position: fixed;
+          list-style: none;
+          margin: -2px 0 0;
+          padding: 0;
+          font-size: 14px;
+          border: 1px solid #03A9F4;
+          border-radius: 4px;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        `}
+      >
         {
-          items.map((item, index) => (
-            <Option
-              key={index}
-              label={item.label}
-              value={item.value}
-              parent={parent}
-            >
-              {item.label}
+          items.map((item, index) => {
+            return (
+              <Option
+                key={index}
+                label={item.label}
+                value={item.value}
+                parent={parent}
+                data={item}
+              >
+                {item.label}
 
-              {
-                typeof item.items !== 'undefined' && (
-                  <List
-                    parent={{
-                      ...item,
-                      parent,
-                    }}
-                    items={item.items}
-                  />
-                )
-              }
-            </Option>
-          ))
+                {
+                  typeof item.items !== 'undefined' && (
+                    <List
+                      parent={{
+                        ...item,
+                        parent,
+                      }}
+                      items={item.items}
+                    />
+                  )
+                }
+              </Option>
+            );
+          })
         }
       </ul>
     )
@@ -138,6 +169,7 @@ class Select extends Component {
     })),
     placeholder: PropTypes.string,
     search: PropTypes.bool,
+    multiple: PropTypes.bool,
     searchHandler: PropTypes.func,
     render: PropTypes.func,
     renderItem: PropTypes.func,
@@ -148,6 +180,7 @@ class Select extends Component {
     data: [],
     placeholder: 'Select an item...',
     search: false,
+    multiple: false,
     searchHandler: null,
     render: () => null,
     renderItem: () => null,
@@ -156,12 +189,10 @@ class Select extends Component {
 
   static find = (data, searchQuery) => {
     return data.reduce(function testItems(matches, item) {
-      let matchingItems = item.items && item.items.reduce(testItems, []);
+      const itemMatches = item.label.toLowerCase().includes(searchQuery.toLowerCase());
+      let matchingItems = itemMatches ? item.items : item.items && item.items.reduce(testItems, []);
 
-      if (
-        item.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (matchingItems && matchingItems.length > 0)
-      ) {
+      if (itemMatches || (matchingItems && matchingItems.length > 0)) {
         return [
           ...matches,
           {
@@ -232,10 +263,18 @@ class Select extends Component {
 
   handleItemClick = (item) => {
     const {
+      multiple,
       onChange,
     } = this.props;
 
-    const selection = [item];
+    const selection = multiple ? (
+      [
+        ...this.state.selection,
+        item,
+      ]
+    ) : (
+      [item]
+    );
     
     this.setState({
       selection,
@@ -294,6 +333,7 @@ class Select extends Component {
       data,
       placeholder,
       search,
+      multiple,
       render,
       renderItem,
       searchHandler,
@@ -308,32 +348,71 @@ class Select extends Component {
       filteredData,
     } = this.state;
 
-    /* Calculate display 'label' and 'value' */
-    let value, label;
+    /* Calculate display label and value */
+    let selectionString, label;
 
-    if (selection[0]) {
-      label = selection[0].label;
-      value = selection[0].value;
+    if (selection.length) {
+      if (multiple) {
+        label = selection.map(item => item.labelPath).join(',');
+        selectionString = selection.map(item => item.path).join(',');
+      } else {
+        label = selection[0].data.label;
+        selectionString = selection[0].data.value;
+      }
     } else {
       label = placeholder;
-      value = '';
+      selectionString = '';
     }
 
     return (
       <Context.Provider value={{
+        selection,
+        selectionString,
         onItemClick: this.handleItemClick,
         renderItem,
       }}>
         <div
           ref={(el) => { this.node = el; }}
+          className={classnames('select')}
         >
           {
             render(selection, () => {
               this.toggleMenu();
             }) || (
-              <div onClick={this.toggleMenu}>
+              <span
+                className={classnames('select-trigger', css`
+                  position: relative;
+                  display: inline-block;
+                  width: 100%;
+                  padding: 10px;
+                  font-size: 14px;
+                  line-height: 1;
+                  cursor: pointer;
+                  border: 1px solid ${borderColor};
+                  background: #fff;
+                  border-radius: 4px;
+                  box-sizing: border-box;
+                  transition: 150ms border-color;
+                  user-select: none;
+
+                  &:hover {
+                    border-color: ${borderColorHover};
+                  }
+
+                  &:before {
+                    content: '';
+                    position: absolute;
+                    top: calc(50% - 2px);
+                    right: 10px;
+                    display: block;
+                    border: 4px solid transparent;
+                    border-top-color: #333;
+                  }
+                `)}
+                onClick={this.toggleMenu}
+              >
                 {label}
-              </div>
+              </span>
             )
           }
 
@@ -348,7 +427,7 @@ class Select extends Component {
             )
           }
 
-          <input type="hidden" value={value} {...props} />
+          <input type="hidden" value={selectionString} {...props} />
 
           {
             active && (

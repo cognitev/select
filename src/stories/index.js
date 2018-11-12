@@ -1,9 +1,11 @@
 import React from 'react';
+import axios from 'axios';
 
 import { storiesOf } from '@storybook/react';
 import { action } from '@storybook/addon-actions';
 
 import Select from '../Select';
+import './styles.css';
 
 let timeout;
 
@@ -33,17 +35,19 @@ const veggies = [
   },
   {
     label: 'Weird apples',
-    value: 'weird-apples',
+    value: 'weird apples',
   },
 ];
 
 const food = [
   {
     label: 'Fruits',
+    value: 'fruits',
     items: fruits,
   },
   {
     label: 'Veggies',
+    value: 'veggies',
     items: veggies,
   },
 ];
@@ -81,25 +85,29 @@ const cocaColas = [
 const drinks = [
   {
     label: 'PepsiColas',
+    value: 'pepsicolas',
     items: pepsiColas,
   },
   {
     label: 'CocaColas',
+    value: 'cocacolas',
     items: cocaColas,
   },
   {
     label: 'Weird apples',
-    value: 'weird-apples',
+    value: 'weird apples',
   },
 ];
 
 const consumables = [
   {
     label: 'Food',
+    value: 'food',
     items: food,
   },
   {
     label: 'Drinks',
+    value: 'drinks',
     items: drinks,
   },
 ]
@@ -132,22 +140,8 @@ storiesOf('Select', module)
       render={(selection, openMenu) => (
         <>
           Selected: {(() => {
-            function getLabel(item) {
-              return (
-                <strong>
-                  {item.parent && (
-                    <>
-                      {getLabel(item.parent)}
-                      &nbsp;/&nbsp;
-                    </>
-                  )}
-                  {item.label}
-                </strong>
-              );
-            }
-
             if (selection.length) {
-              return getLabel(selection[0]);
+              return <strong>{selection[0].path}</strong>;
             }
           })()}
           <button onClick={openMenu}>Open</button>
@@ -160,18 +154,18 @@ storiesOf('Select', module)
       data={fruits}
       renderItem={(item) => (
         <button>
-          {item.label}: {item.value}
+          {item.label}
         </button>
       )}
     />
   ))
-  .add('With search', () => (
+  .add('Search', () => (
     <Select
       data={consumables}
       search
     />
   ))
-  .add('With custom search (sensitev)', () => (
+  .add('Custom search (sensitev)', () => (
     <Select
       data={fruits}
       search
@@ -182,7 +176,7 @@ storiesOf('Select', module)
       }
     />
   ))
-  .add('With async search', () => (
+  .add('Async search', () => (
     <Select
       data={consumables}
       search
@@ -192,6 +186,30 @@ storiesOf('Select', module)
           timeout = setTimeout(resolve, 3000, Select.find(items, query));
         })
       }
+    />
+  ))
+  .add('API search', () => (
+    <Select
+      data={consumables}
+      search
+      searchHandler={
+        (items, query) => {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => {
+            axios.get(`http://api-testing.instascaler.com/v2/locations?search=${query}`, {
+              headers: {
+                'Authorization': 'JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImhlbGxvdGVzdGluZ0BpbnN0YXNjYWxlci5jb20iLCJpYXQiOjE1NDIwMjAwOTAsImV4cCI6MTU0MjA2MzI5MH0.8GAoOlYztlnuflHwOrR6ZNZ7W9tRe2Pgq4W6KgevI1E',
+              }
+            }).then(r => console.log(r));
+          }, 500);
+        }
+      }
+    />
+  ))
+  .add('Multiple options', () => (
+    <Select
+      data={consumables}
+      multiple
     />
   ))
 ;
