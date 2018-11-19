@@ -5,8 +5,12 @@ import { css } from 'emotion';
 import classnames from 'classnames';
 
 /* Theme */
-const borderColor = '#e6e6e6';
-const borderColorHover = '#03A9F4';
+const theme = {
+  themeColor: '#03A9F4',
+  borderColor: '#e6e6e6',
+  borderColorHover: '#03A9F4',
+  menuMaxHeight: 300,
+};
 
 /* Create the root element for Select */
 let root = document.getElementById('selectalot-root');
@@ -20,200 +24,220 @@ if (!root) {
 /* Create context for Select */
 const Context = React.createContext();
 
-/* Components */
+/* =========================================================================== */
+/* Option Class
+/* =========================================================================== */
 
-class Option extends Component {
+export class Option extends Component {
+  static contextType = Context;
+  
   static propTypes = {
-    label: PropTypes.string,
+    path: PropTypes.string,
+    labelPath: PropTypes.string,
     value: PropTypes.string,
-    parent: PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      value: PropTypes.string,
-      items: PropTypes.array,
-    }),
-    data: PropTypes.any,
+    selected: PropTypes.bool,
+    disabled: PropTypes.bool,
+    options: PropTypes.arrayOf(PropTypes.shape({
+      label: PropTypes.node.isRequired,
+      value: PropTypes.string.isRequired,
+      selected: PropTypes.bool,
+      disabled: PropTypes.bool,
+    })),
+    renderOptions: PropTypes.func,
     children: PropTypes.node,
+    className: PropTypes.string,
+    $level: PropTypes.number,
   };
 
   static defaultProps = {
-    label: '',
+    path: '',
+    labelPath: '',
     value: '',
-    parent: null,
-    data: null,
+    selected: false,
+    disabled: false,
+    options: [],
+    renderOptions: () => null,
     children: null,
+    className: '',
+    $level: 0,
   };
 
-  static contextType = Context;
-
-  handleClick = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    this.context.onItemClick({
-      data: this.props.data,
-      path: this.getPath('value'),
-      labelPath: this.getPath('label'),
-    });
-  };
-
-  getPath = (prop) => {
-    const traversePath = (item) => `${item.parent ? `${traversePath(item.parent)}/` : ''}${item[prop]}`;
-    return traversePath(this.props);
-  }
-  
-  render() {
+  handleClick = () => {
     const {
-      data,
-      className,
-      children,
+      value,
+      children: label,
+      path,
+      labelPath,
     } = this.props;
 
+    this.context.onItemClick({
+      value,
+      label,
+      path,
+      labelPath,
+    });
+  }
+
+  render() {
     const {
-      selectionString,
-    } = this.context;
-    
-    const path = this.getPath();
-    const isSelected = selectionString.indexOf(path, 0) !== -1;
-    const hasItems = data.items && data.items.length > 0;
+      path,
+      labelPath,
+      value,
+      selected,
+      disabled,
+      options,
+      renderOptions,
+      children: label,
+      className,
+      $level,
+      ...props
+    } = this.props;
+
+    const childOptions = renderOptions() || (
+      options.length > 0 && options.map((option, index) => (
+        <Option
+          key={index}
+          path={`${path ? `${path}/` : ''}${option.value}`}
+          labelPath={`${labelPath ? `${labelPath}/` : ''}${option.label}`}
+          value={option.value}
+          selected={option.selected}
+          disabled={option.disabled}
+          options={option.options}
+        >
+          {option.label}
+        </Option>
+      ))
+    );
+
+    const childList = childOptions && (
+      <ul
+        className={className}
+        {...props}
+      >
+        {childOptions}
+      </ul>
+    );
+
+    if (!label) {
+      return childList;
+    }
 
     return (
       <li
-        className={classnames(className, {
-          'is-selected': isSelected,
-          'has-items': hasItems,
-        })}
-        onClick={this.handleClick}
+        className={
+          classnames(className, {
+            'is-selected': selected,
+            'is-disabled': disabled,
+          })
+        }
+        {...props}
       >
-        {this.context.renderItem(this.props.data) || children}
+        <div
+          onClick={this.handleClick}
+          className={css`
+            display: inline-block;
+            width: 100%;
+            padding: 10px;
+            padding-left: ${$level * 30 + 10}
+            cursor: pointer;
+            user-select: none;
+            background-color: #fff;
+            box-sizing: border-box;
+            transition: 150ms background-color;
+
+            &:hover,
+            &:focus {
+              background-color: #f9f9f9;
+            }
+
+            &:active {
+              background-color: #f6f6f6;
+            }
+
+            .is-selected > & {
+              color: ${theme.themeColor};
+            }
+
+            .is-disabled > & {
+              cursor: default;
+              color: #ccc;
+              background-color: #fff;
+            }
+          `}
+        >
+          {label}
+        </div>
+
+        {childList}
       </li>
     );
   }
 }
 
-class List extends Component {
+/* =========================================================================== */
+/* OptGroup Class
+/* =========================================================================== */
+
+export class OptGroup extends Component {
   static propTypes = {
-    parent: PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      value: PropTypes.string,
-      items: PropTypes.array,
-    }),
-    items: PropTypes.arrayOf(PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      value: PropTypes.string,
-      items: PropTypes.array,
+    label: PropTypes.node.isRequired,
+    options: PropTypes.arrayOf(PropTypes.shape({
+      label: PropTypes.node.isRequired,
+      value: PropTypes.string.isRequired,
+      selected: PropTypes.bool,
+      disabled: PropTypes.bool,
     })),
   };
 
   static defaultProps = {
-    parent: null,
-    items: [],
+    options: null,
   };
 
   render() {
     const {
-      parent,
-      items,
+      label,
+      options,
+      children,
     } = this.props;
-    
-    return (
-      <ul
-        className={css`
-          position: fixed;
-          list-style: none;
-          margin: -2px 0 0;
-          padding: 0;
-          font-size: 14px;
-          border: 1px solid #03A9F4;
-          border-radius: 4px;
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-        `}
-      >
-        {
-          items.map((item, index) => {
-            return (
-              <Option
-                key={index}
-                label={item.label}
-                value={item.value}
-                parent={parent}
-                data={item}
-              >
-                {item.label}
 
-                {
-                  typeof item.items !== 'undefined' && (
-                    <List
-                      parent={{
-                        ...item,
-                        parent,
-                      }}
-                      items={item.items}
-                    />
-                  )
-                }
-              </Option>
-            );
-          })
-        }
-      </ul>
-    )
+    return React.createElement(Option, {
+      options,
+      renderOptions: () => children,
+    }, label);
   }
 }
 
+/* =========================================================================== */
+/* Select Class
+/* =========================================================================== */
+
 class Select extends Component {
   static propTypes = {
-    data: PropTypes.arrayOf(PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      value: PropTypes.string,
-      items: PropTypes.array,
+    options: PropTypes.arrayOf(PropTypes.shape({
+      label: PropTypes.node.isRequired,
+      value: PropTypes.string.isRequired,
+      selected: PropTypes.bool,
+      disabled: PropTypes.bool,
     })),
-    placeholder: PropTypes.string,
-    search: PropTypes.bool,
-    multiple: PropTypes.bool,
-    searchHandler: PropTypes.func,
-    render: PropTypes.func,
-    renderItem: PropTypes.func,
-    onChange: PropTypes.func,
   };
 
   static defaultProps = {
-    data: [],
-    placeholder: 'Select an item...',
-    search: false,
-    multiple: false,
-    searchHandler: null,
-    render: () => null,
-    renderItem: () => null,
-    onChange: () => null,
+    options: null,
   };
-
-  static find = (data, searchQuery) => {
-    return data.reduce(function testItems(matches, item) {
-      const itemMatches = item.label.toLowerCase().includes(searchQuery.toLowerCase());
-      let matchingItems = itemMatches ? item.items : item.items && item.items.reduce(testItems, []);
-
-      if (itemMatches || (matchingItems && matchingItems.length > 0)) {
-        return [
-          ...matches,
-          {
-            ...item,
-            items: matchingItems,
-          },
-        ];
-      }
-
-      return matches;
-    }, []);
-  }
 
   state = {
     active: false,
-    loading: false,
+    menuRect: {
+      top: 0,
+      left: 0,
+      width: 0,
+      height: 0,
+    },
     selection: [],
-    searchQuery: '',
-    filteredData: this.props.data,
   };
 
+  /* Toggle menu visibility */
+  
   toggleMenu = () => {
     const {
       active,
@@ -227,19 +251,13 @@ class Select extends Component {
   };
 
   openMenu = () => {
-    const {
-      search,
-    } = this.props;
+    const menuRect = this.node.getBoundingClientRect();
 
     window.addEventListener('mousedown', this.handleClickOutside);
 
     this.setState({
       active: true,
-      searchQuery: '',
-    }, () => {
-      if (search) {
-        this.searchField.focus();
-      }
+      menuRect,
     });
   };
 
@@ -261,183 +279,132 @@ class Select extends Component {
     }
   };
 
-  handleItemClick = (item) => {
-    const {
-      multiple,
-      onChange,
-    } = this.props;
-
-    const selection = multiple ? (
-      [
-        ...this.state.selection,
-        item,
-      ]
-    ) : (
-      [item]
-    );
-    
-    this.setState({
-      selection,
-      active: false,
-    });
-
-    onChange(selection);
-  };
-
-  handleSearch = (e) => {
-    this.setState({
-      searchQuery: e.target.value,
-    }, this.updateFilteredData);
-  };
-
-  updateFilteredData = () => {
-    const {
-      data,
-      searchHandler,
-    } = this.props;
-
-    const {
-      searchQuery,
-    } = this.state;
-
-    let filteredData = data;
-
-    if (typeof searchHandler === 'function') {
-      filteredData = searchHandler(data, searchQuery);
-
-      if (filteredData instanceof Promise) {
-        this.setState({
-          loading: true,
-        });
-        
-        return filteredData.then(data => this.setState({
-          loading: false,
-          filteredData: data,
-        }));
-      }
-    } else {
-      filteredData = Select.find(data, searchQuery);
-    }
-    
-    this.setState({
-      filteredData,
-    });
-  };
-
   componentWillUnmount() {
     window.removeEventListener('mousedown', this.handleClickOutside);
   }
 
+  /* Item click */
+
+  handleItemClick = (item) => {
+    this.setState((state) => {
+      const selection = [
+        ...state.selection,
+        item,
+      ];
+
+      const parts = item.path.split('/');
+      const selectionTree = { ...state.selectionTree };
+      let leaf = selectionTree;
+
+      while (parts.length > 1) {
+        const part = parts.shift();
+        leaf[part] = leaf[part] || {};
+        leaf[part].items = leaf[part].items || {};
+
+        if (parts.length === 1) {
+          leaf[part].items = {
+            ...leaf[part].items,
+            [parts[0]]: {
+              data: item,
+            },
+          };
+        } else {
+          leaf = leaf[part].items;
+        }
+      }
+
+      return {
+        selection,
+        selectionTree,
+      }
+    });
+  };
+
+  /* Render */
+
   render() {
     const {
-      data,
-      placeholder,
-      search,
-      multiple,
-      render,
-      renderItem,
-      searchHandler,
-      ...props
+      options,
+      children,
     } = this.props;
 
     const {
       active,
-      loading,
+      menuRect,
       selection,
-      searchQuery,
-      filteredData,
     } = this.state;
 
-    /* Calculate display label and value */
-    let selectionString, label;
-
-    if (selection.length) {
-      if (multiple) {
-        label = selection.map(item => item.labelPath).join(',');
-        selectionString = selection.map(item => item.path).join(',');
-      } else {
-        label = selection[0].data.label;
-        selectionString = selection[0].data.value;
-      }
-    } else {
-      label = placeholder;
-      selectionString = '';
-    }
+    window.top.s = selection;
 
     return (
       <Context.Provider value={{
-        selection,
-        selectionString,
+        menuRect,
         onItemClick: this.handleItemClick,
-        renderItem,
       }}>
         <div
           ref={(el) => { this.node = el; }}
-          className={classnames('select')}
         >
-          {
-            render(selection, () => {
-              this.toggleMenu();
-            }) || (
-              <span
-                className={classnames('select-trigger', css`
-                  position: relative;
-                  display: inline-block;
-                  width: 100%;
-                  padding: 10px;
-                  font-size: 14px;
-                  line-height: 1;
-                  cursor: pointer;
-                  border: 1px solid ${borderColor};
-                  background: #fff;
-                  border-radius: 4px;
-                  box-sizing: border-box;
-                  transition: 150ms border-color;
-                  user-select: none;
+          <div
+            onClick={this.toggleMenu}
+            className={css`
+              position: relative;
+              display: inline-block;
+              width: 100%;
+              padding: 10px;
+              font: inherit;
+              line-height: 1;
+              cursor: pointer;
+              border: 1px solid ${theme.borderColor};
+              background: #fff;
+              border-radius: 4px;
+              box-sizing: border-box;
+              transition: 150ms border-color;
+              user-select: none;
 
-                  &:hover {
-                    border-color: ${borderColorHover};
-                  }
+              &.is-active,
+              &:hover {
+                border-color: ${theme.borderColorHover};
+              }
 
-                  &:before {
-                    content: '';
-                    position: absolute;
-                    top: calc(50% - 2px);
-                    right: 10px;
-                    display: block;
-                    border: 4px solid transparent;
-                    border-top-color: #333;
-                  }
-                `)}
-                onClick={this.toggleMenu}
-              >
-                {label}
-              </span>
-            )
-          }
+              &:before {
+                content: '';
+                position: absolute;
+                top: calc(50% - 2px);
+                right: 10px;
+                display: block;
+                border: 4px solid transparent;
+                border-top-color: #333;
+              }
+            `}
+          >
+            Trigger
+          </div>
 
-          {
-            search && active && (
-              <input
-                type="text"
-                ref={(el) => { this.searchField = el; }}
-                value={searchQuery}
-                onChange={this.handleSearch}
-              />
-            )
-          }
-
-          <input type="hidden" value={selectionString} {...props} />
+          <div>
+            {
+              selection.map((item) => item.label).join(', ')
+            }
+          </div>
 
           {
             active && (
               ReactDOM.createPortal(
-                loading ? (
-                  <div>Loading...</div>
-                ) : (
-                  <List items={filteredData} />
-                ),
-                root,
+                <Option
+                  options={options}
+                  renderOptions={
+                    () => children
+                  }
+                  className={css`
+                    position: fixed;
+                    z-index: 10000;
+                    top: ${menuRect.y + menuRect.height + 4}px;
+                    left: ${menuRect.x}px;
+                    width: ${menuRect.width}px;
+                    max-height: ${theme.menuMaxHeight}px;
+                    overflow: auto;
+                  `}
+                />,
+                root
               )
             )
           }
